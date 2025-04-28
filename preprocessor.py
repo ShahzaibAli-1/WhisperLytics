@@ -1,5 +1,7 @@
 import re
 import pandas as pd
+
+
 def preprocess(data):
     pattern = r'\d{1,2}/\d{1,2}/\d{2}, \d{1,2}:\d{2}\s?[AP]M -'
     messages = re.split(pattern, data)[1:]
@@ -36,5 +38,16 @@ def preprocess(data):
     df['hour'] = df['date'].dt.hour
     df['minute'] = df['date'].dt.minute
     df['day_name'] = df['date'].dt.day_name()
+    df['only_date'] = df['date'].dt.date
 
+    period = []
+    for hour in df[['day_name', 'hour']]['hour']:
+        if hour == 23:
+            period.append(str(hour) + "-" + str('00'))
+        elif hour == 0:
+            period.append(str('00') + "-" + str(hour + 1))
+        else:
+            period.append(str(hour) + "-" + str(hour + 1))
+
+    df['period'] = period
     return df
