@@ -3,31 +3,40 @@ from wordcloud import WordCloud
 from collections import Counter
 import pandas as pd
 import emoji
+import unicodedata
 extract = URLExtract()
 
 
-def fetch_stats(selected_user,df):
+def clean_message(msg):
+    if isinstance(msg, str):
+        # Normalize and remove all invisible/control characters like \u200e
+        msg = unicodedata.normalize("NFKD", msg)
+        msg = ''.join(ch for ch in msg if not unicodedata.category(ch).startswith("C"))
+        return msg.strip().lower()
+    return ""
 
+def fetch_stats(selected_user, df):
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
 
-    # fetch the number of messages
     num_messages = df.shape[0]
 
-    # fetch the total number of words
     words = []
     for message in df['message']:
         words.extend(message.split())
 
-    # fetch number of media messages
-    num_media_messages = df[df['message'] == '<Media omitted>\n'].shape[0]
+    # Clean each message
+    df['clean_message'] = df['message'].apply(clean_message)
 
-    # fetch number of links shared
+    # Match media messages after cleaning
+    media_phrases = ['<media omitted>', 'image omitted']
+    num_media_messages = df[df['clean_message'].isin(media_phrases)].shape[0]
+
     links = []
     for message in df['message']:
         links.extend(extract.find_urls(message))
 
-    return num_messages,len(words),num_media_messages,len(links)
+    return num_messages, len(words), num_media_messages, len(links)
 
 
 def most_busy_user(df):
@@ -44,17 +53,21 @@ def create_wordcloud(selected_user, df):
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
     temp = df[df['user'] != 'group_notification']
+
     temp = temp[temp['message'] != '<Media omitted>\n']
+    temp = temp[temp['message'] != 'image ommited']
+    temp = temp[temp['message'] != 'message deleted']
 
     def remove_stop_words(message):
         y = []
         for word in message.lower().split():
-            if word not in stop_words:
+            if word not in stop_words or word != 'https' or word != 'message deleted' or word != 'deleted':
                 y.append(word)
-            return " ".join(y)
+        return " ".join(y)
 
-    wc = WordCloud(width=500, height=500, min_font_size=10, background_color='white')
     temp['message'] = temp['message'].apply(remove_stop_words)
+    wc = WordCloud(width=500, height=500, min_font_size=10, background_color='white')
+
     df_wc = wc.generate(temp['message'].str.cat(sep=" "))
     return df_wc
 
